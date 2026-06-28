@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+uploads/
+
+# Token + DB files
+data/*.json
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# TLS cert for corporate proxy (machine-specific)
+certs/
+
+# Real CSV/XLSX data dumps contain candidate PII — never commit
+*.csv
+*.xlsx
+!fixtures/*.csv
+
+# Build artifacts
+web/dist/
+web/node_modules/
+web/tsconfig.tsbuildinfo
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Exports with PII
+exports/

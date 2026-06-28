@@ -1,0 +1,45 @@
+{
+  "name": "hiring-pipeline-tracker",
+  "version": "0.1.0",
+  "description": "Self-hosted hiring pipeline tracker for Leena AI - CSV + Google Calendar ingestion with funnel/visual reporting",
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx watch server/index.ts",
+    "dev:all": "concurrently -n api,web -c blue,green \"NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx watch server/index.ts\" \"npm --prefix web run dev\"",
+    "web": "npm --prefix web run dev",
+    "web:install": "npm --prefix web install",
+    "start": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx server/index.ts",
+    "start:prod": "tsx server/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "setup:airtable": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx server/airtable/setup.ts",
+    "reset:candidates": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx scripts/resetCandidates.ts",
+    "rebuild:candidates": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx scripts/rebuildCandidates.ts",
+    "load": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx scripts/load.ts",
+    "sync": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx scripts/runSync.ts",
+    "export:review": "NODE_EXTRA_CA_CERTS=certs/zscaler-root.pem tsx scripts/exportReview.ts",
+    "test:parsers": "tsx scripts/testParsers.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "multer": "^2.2.0",
+    "papaparse": "^5.4.1",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.10.7",
+    "@types/papaparse": "^5.3.15",
+    "concurrently": "^10.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
