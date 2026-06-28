@@ -5,8 +5,10 @@ import { classifyEvent, type Classification } from '../services/calendar/classif
 import { toConfig } from '../services/calendar/interviewerMatch.ts';
 import {
   listCalendarSources, listInterviewers, loadCandidateKeys,
-  touchCalendarSource, upsertInterviews, type CalendarSourceRow,
+  touchCalendarSource, upsertInterviews, upsertCandidates,
+  listRecords, type CalendarSourceRow, type AirtableRecord,
 } from '../airtable/client.ts';
+import { F } from '../airtable/schema.ts';
 
 export interface SyncOptions {
   since?: string; // ISO date; full pull from this date (ignores incremental cursor)
@@ -31,6 +33,7 @@ export interface SyncSummary {
   matchedCandidates: number;
   parseErrors: number;
   written: { created: number; updated: number };
+  reconciled?: ReconcileResult;
   sample: Record<string, unknown>[];
 }
 
@@ -219,5 +222,122 @@ export async function syncCalendars(opts: SyncOptions = {}): Promise<SyncSummary
   }));
 
   if (!dryRun && fields.length) summary.written = await upsertInterviews(fields);
+
+  if (!dryRun) {
+    summary.reconciled = await reconcileUnmatchedInterviews();
+  }
+
   return summary;
+}
+
+// ---------------------------------------------------------------------------
+// Reconcile unmatched interviews → create candidate stubs
+// ---------------------------------------------------------------------------
+
+export interface ReconcileResult {
+  unmatchedEmails: number;
+  fromReferral: number;
+  fromSourced: number;
+  created: number;
+  updated: number;
+}
+
+/**
+ * Find in-scope SDR interviews whose Candidate Email doesn't exist in the
+ * Candidates table. For each unique email:
+ *   1. Check if any existing Referral candidate matches by name →
+ *      create candidate with Source=Referral, Date Applied = referral date
+ *   2. Otherwise → create candidate with Source=Sourced,
+ *      Date Applied = earliest interview date
+ */
+export async function reconcileUnmatchedInterviews(): Promise<ReconcileResult> {
+  const [candRecs, ivRecs] = await Promise.all([
+    listRecords('Candidates'),
+    listRecords('Interviews'),
+  ]);
+
+  const candByEmail = new Set<string>();
+  const referralsByName = new Map<string, AirtableRecord>();
+  for (const c of candRecs) {
+    const email = String(c.fields[F.email] ?? '').toLowerCase();
+    if (email) candByEmail.add(email);
+    if (c.fields[F.source] === 'Referral') {
+      const name = String(c.fields[F.name] ?? '').trim().toLowerCase();
+      if (name) referralsByName.set(name, c);
+    }
+  }
+
+  const sdrIvs = ivRecs.filter((i) =>
+    i.fields['In Scope'] === true && i.fields['Role'] === 'SDR',
+  );
+
+  // Group unmatched interviews by email, keeping the earliest date and name
+  const unmatched = new Map<string, { name: string; email: string; role: string; geo: string; earliestDate: string }>();
+  for (const i of sdrIvs) {
+    const email = String(i.fields['Candidate Email'] ?? '').toLowerCase();
+    if (!email || candByEmail.has(email)) continue;
+    const existing = unmatched.get(email);
+    const iDate = String(i.fields['Interview Date'] ?? '').slice(0, 10);
+    if (!existing) {
+      unmatched.set(email, {
+        name: String(i.fields['Candidate Name'] ?? ''),
+        email,
+        role: String(i.fields['Role'] ?? 'SDR'),
+        geo: String(i.fields['Geo'] ?? 'Unknown'),
+        earliestDate: iDate,
+      });
+    } else if (iDate && (!existing.earliestDate || iDate < existing.earliestDate)) {
+      existing.earliestDate = iDate;
+    }
+  }
+
+  if (!unmatched.size) return { unmatchedEmails: 0, fromReferral: 0, fromSourced: 0, created: 0, updated: 0 };
+
+  let fromReferral = 0;
+  let fromSourced = 0;
+  const stubs: Record<string, unknown>[] = [];
+
+  for (const [, info] of unmatched) {
+    const nameKey = info.name.trim().toLowerCase();
+    const refMatch = referralsByName.get(nameKey);
+
+    if (refMatch) {
+      fromReferral++;
+      stubs.push({
+        [F.name]: info.name,
+        [F.email]: info.email,
+        [F.role]: info.role,
+        [F.geo]: info.geo,
+        [F.inScope]: true,
+        [F.source]: 'Referral',
+        [F.dateApplied]: refMatch.fields[F.dateApplied] ?? (info.earliestDate || null),
+        [F.referrer]: refMatch.fields[F.referrer] ?? null,
+        [F.status]: 'Active',
+        [F.sourceFile]: 'calendar-reconcile',
+      });
+    } else {
+      fromSourced++;
+      stubs.push({
+        [F.name]: info.name,
+        [F.email]: info.email,
+        [F.role]: info.role,
+        [F.geo]: info.geo,
+        [F.inScope]: true,
+        [F.source]: 'Sourced',
+        [F.dateApplied]: info.earliestDate || null,
+        [F.status]: 'Active',
+        [F.sourceFile]: 'calendar-reconcile',
+      });
+    }
+  }
+
+  // Remove null/empty fields
+  for (const s of stubs) {
+    for (const k of Object.keys(s)) {
+      if (s[k] === null || s[k] === undefined || s[k] === '') delete s[k];
+    }
+  }
+
+  const res = await upsertCandidates(stubs, ['Email']);
+  return { unmatchedEmails: unmatched.size, fromReferral, fromSourced, created: res.created, updated: res.updated };
 }

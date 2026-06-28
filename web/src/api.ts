@@ -123,8 +123,8 @@ export const login = (password: string) =>
 export const fetchMetrics = (f: Filters) => req<Metrics>(`/api/data/metrics${qs(f)}`);
 export const fetchCandidates = (f: Filters) =>
   req<{ count: number; candidates: Candidate[] }>(`/api/data/candidates${qs(f)}`);
-export const fetchPivot = (geo?: string) =>
-  req<PivotResponse>(`/api/data/pivot${geo ? `?geo=${geo}` : ''}`);
+export const fetchPivot = (params?: { geo?: string; dateFrom?: string; dateTo?: string }) =>
+  req<PivotResponse>(`/api/data/pivot${qs(params ?? {})}`);
 export const updateCandidate = (id: string, fields: Record<string, unknown>) =>
   jsonReq<{ ok: boolean; id: string; fields: Record<string, any> }>(`/api/data/candidates/${id}`, 'PATCH', fields);
 

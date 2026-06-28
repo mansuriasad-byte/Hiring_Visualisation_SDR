@@ -1,19 +1,38 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   fetchPivot, type PivotResponse, type WeekSourceTable,
   type SourceFunnelRow, type VelocityRow, type InterviewerLoadData,
 } from '../api.ts';
 
+type SortDir = 'asc' | 'desc';
+type SortState<K extends string = string> = { col: K; dir: SortDir } | null;
+
+function toggle<K extends string>(prev: SortState<K>, col: K): SortState<K> {
+  if (prev?.col === col) return prev.dir === 'asc' ? { col, dir: 'desc' } : null;
+  return { col, dir: 'asc' };
+}
+
+function arrow(active: boolean, dir: SortDir) {
+  if (!active) return ' ↕';
+  return dir === 'asc' ? ' ↑' : ' ↓';
+}
+
 export default function Pivot() {
   const [geo, setGeo] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [data, setData] = useState<PivotResponse | null>(null);
   const [err, setErr] = useState('');
 
   useEffect(() => {
     setErr('');
     setData(null);
-    fetchPivot(geo || undefined).then(setData).catch((e) => setErr(String(e.message)));
-  }, [geo]);
+    fetchPivot({
+      geo: geo || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    }).then(setData).catch((e) => setErr(String(e.message)));
+  }, [geo, dateFrom, dateTo]);
 
   return (
     <div>
@@ -26,6 +45,15 @@ export default function Pivot() {
             <option value="Europe">SDR — Europe</option>
           </select>
         </div>
+        <div>
+          <label>From</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <label>To</label>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        <button className="secondary" onClick={() => { setGeo(''); setDateFrom(''); setDateTo(''); }} style={{ marginLeft: 'auto' }}>Reset</button>
       </div>
 
       {err && <div className="loading">Error: {err}</div>}
@@ -36,18 +64,11 @@ export default function Pivot() {
             {data.candidateCount} candidates · {data.interviewCount} in-scope interviews · {data.geo}
           </div>
 
-          {/* Source conversion funnel */}
           <FunnelTable rows={data.sourceFunnel} />
-
-          {/* Velocity */}
           <VelocityTable rows={data.velocity} />
-
-          {/* Week × Source per stage */}
           {data.weekSourceTables.map((t) => (
             <WeekSource key={t.id} t={t} />
           ))}
-
-          {/* Interviewer load */}
           <InterviewerLoad data={data.interviewerLoad} />
         </>
       )}
@@ -56,9 +77,41 @@ export default function Pivot() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Sortable header                                                     */
+/* ------------------------------------------------------------------ */
+function Th({ col, sort, onSort, className, children }: {
+  col: string; sort: SortState; onSort: (col: string) => void;
+  className?: string; children: React.ReactNode;
+}) {
+  const active = sort?.col === col;
+  return (
+    <th className={className} onClick={() => onSort(col)}
+        style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+      {children}<span className="sort-arrow" style={{ opacity: active ? 1 : 0.3, fontSize: 11 }}>{arrow(active, sort?.dir ?? 'asc')}</span>
+    </th>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Source conversion funnel                                            */
 /* ------------------------------------------------------------------ */
+type FunnelCol = 'source' | 'applications' | 'r1' | 'appToR1' | 'r2' | 'r1ToR2' | 'offers' | 'r2ToOffer' | 'accepted' | 'offerToAccept' | 'overall';
+
 function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
+  const [sort, setSort] = useState<SortState<FunnelCol>>(null);
+
+  const sorted = useMemo(() => {
+    const data = rows.filter((r) => r.source !== 'Grand Total');
+    const total = rows.find((r) => r.source === 'Grand Total');
+    if (!sort) return [...data, ...(total ? [total] : [])];
+    const s = [...data].sort((a, b) => {
+      const av = a[sort.col], bv = b[sort.col];
+      if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      return sort.dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+    return [...s, ...(total ? [total] : [])];
+  }, [rows, sort]);
+
   const csvExport = () => {
     const hdr = 'Source,Applications,R1,App→R1%,R2,R1→R2%,Offer,R2→Offer%,Accepted,Offer→Accept%,App→Accept%';
     const lines = [hdr, ...rows.map((r) =>
@@ -66,6 +119,8 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
     )];
     dl('source-funnel.csv', lines.join('\n'));
   };
+
+  const onSort = (col: string) => setSort((s) => toggle(s, col as FunnelCol));
 
   return (
     <div className="panel" style={{ padding: 0, marginBottom: 18, overflowX: 'auto' }}>
@@ -76,17 +131,21 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
       <table className="pivot">
         <thead>
           <tr>
-            <th>Source</th>
-            <th className="r">Applications</th>
-            <th className="r">R1</th><th className="r pct">App→R1</th>
-            <th className="r">R2</th><th className="r pct">R1→R2</th>
-            <th className="r">Offer</th><th className="r pct">R2→Offer</th>
-            <th className="r">Accepted</th><th className="r pct">Offer→Accept</th>
-            <th className="r pct">Overall</th>
+            <Th col="source" sort={sort} onSort={onSort}>Source</Th>
+            <Th col="applications" sort={sort} onSort={onSort} className="r">Applications</Th>
+            <Th col="r1" sort={sort} onSort={onSort} className="r">R1</Th>
+            <Th col="appToR1" sort={sort} onSort={onSort} className="r pct">App→R1</Th>
+            <Th col="r2" sort={sort} onSort={onSort} className="r">R2</Th>
+            <Th col="r1ToR2" sort={sort} onSort={onSort} className="r pct">R1→R2</Th>
+            <Th col="offers" sort={sort} onSort={onSort} className="r">Offer</Th>
+            <Th col="r2ToOffer" sort={sort} onSort={onSort} className="r pct">R2→Offer</Th>
+            <Th col="accepted" sort={sort} onSort={onSort} className="r">Accepted</Th>
+            <Th col="offerToAccept" sort={sort} onSort={onSort} className="r pct">Offer→Accept</Th>
+            <Th col="overall" sort={sort} onSort={onSort} className="r pct">Overall</Th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {sorted.map((r) => {
             const isTotal = r.source === 'Grand Total';
             const s: React.CSSProperties = isTotal ? { fontWeight: 700, borderTop: '2px solid var(--border)' } : {};
             return (
@@ -108,7 +167,7 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Velocity (avg days between stages)                                 */
+/* Velocity                                                            */
 /* ------------------------------------------------------------------ */
 function VelocityTable({ rows }: { rows: VelocityRow[] }) {
   return (
@@ -133,8 +192,24 @@ function VelocityTable({ rows }: { rows: VelocityRow[] }) {
 /* Week × Source table (one per stage)                                 */
 /* ------------------------------------------------------------------ */
 function WeekSource({ t }: { t: WeekSourceTable }) {
+  const [sort, setSort] = useState<SortState>(null);
   const max = Math.max(1, ...t.rows.flatMap((r) => t.cols.map((c) => r.cells[c] ?? 0)));
   const shade = (n: number) => (n ? `rgba(91,140,255,${0.12 + 0.55 * (n / max)})` : 'transparent');
+
+  const sorted = useMemo(() => {
+    const visible = t.rows.filter((r) => r.total > 0);
+    if (!sort) return visible;
+    return [...visible].sort((a, b) => {
+      let av: number | string, bv: number | string;
+      if (sort.col === 'week') { av = a.week; bv = b.week; }
+      else if (sort.col === 'total') { av = a.total; bv = b.total; }
+      else { av = a.cells[sort.col] ?? 0; bv = b.cells[sort.col] ?? 0; }
+      if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      return sort.dir === 'asc' ? av - (bv as number) : (bv as number) - av;
+    });
+  }, [t.rows, t.cols, sort]);
+
+  const onSort = (col: string) => setSort((s) => toggle(s, col));
 
   const csvExport = () => {
     const hdr = ['Week', ...t.cols, 'Total'].join(',');
@@ -153,13 +228,13 @@ function WeekSource({ t }: { t: WeekSourceTable }) {
       <table className="pivot">
         <thead>
           <tr>
-            <th>Week</th>
-            {t.cols.map((c) => <th key={c} className="r">{c}</th>)}
-            <th className="r">Total</th>
+            <Th col="week" sort={sort} onSort={onSort}>Week</Th>
+            {t.cols.map((c) => <Th key={c} col={c} sort={sort} onSort={onSort} className="r">{c}</Th>)}
+            <Th col="total" sort={sort} onSort={onSort} className="r">Total</Th>
           </tr>
         </thead>
         <tbody>
-          {t.rows.filter((r) => r.total > 0).map((r) => (
+          {sorted.map((r) => (
             <tr key={r.week} style={{ cursor: 'default' }}>
               <td>{r.week}</td>
               {t.cols.map((c) => {
@@ -186,9 +261,25 @@ function WeekSource({ t }: { t: WeekSourceTable }) {
 /* Interviewer load by week                                           */
 /* ------------------------------------------------------------------ */
 function InterviewerLoad({ data }: { data: InterviewerLoadData }) {
-  if (!data.rows.length) return null;
+  const [sort, setSort] = useState<SortState>(null);
   const max = Math.max(1, ...data.rows.flatMap((r) => data.weeks.map((w) => r.cells[w] ?? 0)));
+
+  const sorted = useMemo(() => {
+    if (!sort) return data.rows;
+    return [...data.rows].sort((a, b) => {
+      let av: number | string, bv: number | string;
+      if (sort.col === 'interviewer') { av = a.interviewer; bv = b.interviewer; }
+      else if (sort.col === 'total') { av = a.total; bv = b.total; }
+      else { av = a.cells[sort.col] ?? 0; bv = b.cells[sort.col] ?? 0; }
+      if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      return sort.dir === 'asc' ? av - (bv as number) : (bv as number) - av;
+    });
+  }, [data.rows, data.weeks, sort]);
+
+  const onSort = (col: string) => setSort((s) => toggle(s, col));
   const shade = (n: number) => (n ? `rgba(54,198,146,${0.15 + 0.55 * (n / max)})` : 'transparent');
+
+  if (!data.rows.length) return null;
 
   return (
     <div className="panel" style={{ padding: 0, marginBottom: 18, overflowX: 'auto' }}>
@@ -196,13 +287,13 @@ function InterviewerLoad({ data }: { data: InterviewerLoadData }) {
       <table className="pivot">
         <thead>
           <tr>
-            <th>Interviewer</th>
-            {data.weeks.map((w) => <th key={w} className="r">{w}</th>)}
-            <th className="r">Total</th>
+            <Th col="interviewer" sort={sort} onSort={onSort}>Interviewer</Th>
+            {data.weeks.map((w) => <Th key={w} col={w} sort={sort} onSort={onSort} className="r">{w}</Th>)}
+            <Th col="total" sort={sort} onSort={onSort} className="r">Total</Th>
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((r) => (
+          {sorted.map((r) => (
             <tr key={r.interviewer} style={{ cursor: 'default' }}>
               <td>{r.interviewer}</td>
               {data.weeks.map((w) => {

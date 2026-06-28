@@ -27,7 +27,7 @@ export default function Dashboard() {
   const c = m.candidates;
   const topFunnel = c.funnel[0]?.reached || 1;
   const toRows = (rec: Record<string, number>) =>
-    Object.entries(rec).filter(([k]) => k !== '(none)').map(([name, value]) => ({ name, value }))
+    Object.entries(rec).filter(([k]) => k !== 'Unknown').map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   const statusRows = toRows(c.byStatus);
   const sourceRows = toRows(c.bySource);

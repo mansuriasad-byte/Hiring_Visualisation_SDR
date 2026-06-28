@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { oauthConfigured, hasToken } from '../google/oauth.ts';
 import { airtableConfigured, listCalendarSources } from '../airtable/client.ts';
-import { syncCalendars } from '../google/calendarSync.ts';
+import { syncCalendars, reconcileUnmatchedInterviews } from '../google/calendarSync.ts';
 import { requireAuth, requireAdmin } from '../auth/session.ts';
 
 const router = Router();
@@ -37,6 +37,17 @@ router.post('/sync', requireAdmin, async (req, res) => {
     res.json({ ok: true, ...summary });
   } catch (err) {
     res.status(500).json({ error: `Sync failed: ${(err as Error).message}` });
+  }
+});
+
+/** Reconcile unmatched interviews → create candidate stubs. Admin only. */
+router.post('/reconcile', requireAdmin, async (_req, res) => {
+  if (!airtableConfigured()) return res.status(400).json({ error: 'Airtable not configured.' });
+  try {
+    const result = await reconcileUnmatchedInterviews();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: `Reconcile failed: ${(err as Error).message}` });
   }
 });
 

@@ -15,7 +15,7 @@ const tally = (recs: AirtableRecord[], field: string) => {
   const m: Record<string, number> = {};
   for (const r of recs) {
     const v = r.fields[field];
-    const key = v === undefined || v === '' ? '(none)' : String(v);
+    const key = v === undefined || v === '' ? 'Unknown' : String(v);
     m[key] = (m[key] ?? 0) + 1;
   }
   return m;
@@ -190,17 +190,24 @@ router.get('/pivot', requireAuth, async (req, res) => {
       listRecords('Interviews'),
     ]);
 
-    // --- scope: SDR only, filter by geo ---
+    // --- scope: SDR only, filter by geo + date range ---
     const geo = typeof req.query.geo === 'string' ? req.query.geo : undefined;
+    const dateFrom = typeof req.query.dateFrom === 'string' ? req.query.dateFrom : undefined;
+    const dateTo = typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined;
+
     let cand = candRecs.filter((r) =>
       r.fields[F.inScope] === true && r.fields[F.role] === 'SDR',
     );
     if (geo) cand = cand.filter((r) => r.fields[F.geo] === geo);
+    if (dateFrom) cand = cand.filter((r) => String(r.fields[F.dateApplied] ?? '') >= dateFrom);
+    if (dateTo) cand = cand.filter((r) => String(r.fields[F.dateApplied] ?? '9999') <= dateTo);
 
     let iv = ivRecs.filter((r) =>
       r.fields['In Scope'] === true && r.fields['Role'] === 'SDR',
     );
     if (geo) iv = iv.filter((r) => r.fields['Geo'] === geo);
+    if (dateFrom) iv = iv.filter((r) => String(r.fields['Interview Date'] ?? '') >= dateFrom);
+    if (dateTo) iv = iv.filter((r) => String(r.fields['Interview Date'] ?? '9999') <= dateTo);
 
     // --- build candidate lookup by email ---
     const candByEmail = new Map<string, AirtableRecord>();
@@ -219,7 +226,7 @@ router.get('/pivot', requireAuth, async (req, res) => {
     // Applied: from ATS (date applied)
     for (const c of cand) {
       const da = c.fields[F.dateApplied];
-      if (da) applied.push({ date: String(da), source: String(c.fields[F.source] ?? '(none)') });
+      if (da) applied.push({ date: String(da), source: String(c.fields[F.source] ?? 'Unknown') });
     }
 
     // R1 / R2: from Interviews (calendar). Join to candidate for source.
@@ -229,14 +236,14 @@ router.get('/pivot', requireAuth, async (req, res) => {
       if (!idate) continue;
       const candEmail = String(i.fields['Candidate Email'] ?? '').toLowerCase();
       const candRec = candByEmail.get(candEmail);
-      const source = candRec ? String(candRec.fields[F.source] ?? '(none)') : '(unmatched)';
+      const source = candRec ? String(candRec.fields[F.source] ?? 'Unknown') : '(unmatched)';
       if (round === 'Round 1') r1.push({ date: idate, source });
       else if (round === 'Round 2') r2.push({ date: idate, source });
     }
 
     // Offers + Joined: from candidate records (offer/join dates)
     for (const c of cand) {
-      const src = String(c.fields[F.source] ?? '(none)');
+      const src = String(c.fields[F.source] ?? 'Unknown');
       if (c.fields[F.offerDate]) offers.push({ date: String(c.fields[F.offerDate]), source: src });
       if (c.fields[F.joinDate]) joined.push({ date: String(c.fields[F.joinDate]), source: src });
     }
