@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { listRecords, updateRecord, airtableConfigured, type AirtableRecord } from '../airtable/client.ts';
 import { F } from '../airtable/schema.ts';
 import { STAGE_ORDER } from '../services/normalize.ts';
-import { groupSource, getSourceGroupConfig, setSourceGroupConfig, type SourceGroupConfig } from '../services/sourceGroups.ts';
+import { groupSource } from '../services/sourceGroups.ts';
 import { requireAuth, requireAdmin } from '../auth/session.ts';
 
 const router = Router();
@@ -408,23 +408,6 @@ router.get('/pivot', requireAuth, async (req, res) => {
       interviewerLoad: { weeks: iwWeeks, rows: interviewerLoad },
     });
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
-});
-
-// ---------------------------------------------------------------------------
-// Source group config (admin)
-// ---------------------------------------------------------------------------
-
-router.get('/source-groups', requireAuth, (_req, res) => {
-  res.json(getSourceGroupConfig());
-});
-
-router.put('/source-groups', requireAdmin, (req, res) => {
-  const body = req.body as SourceGroupConfig;
-  if (!body?.groups || typeof body.groups !== 'object') {
-    return res.status(400).json({ error: 'Body must have { groups: { displayName: [rawValues] } }' });
-  }
-  setSourceGroupConfig(body);
-  res.json({ ok: true, ...getSourceGroupConfig() });
 });
 
 export default router;

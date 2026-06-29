@@ -167,10 +167,3 @@ export const uploadPreview = (file: File, type: UploadType, role?: string, geo?:
 export const uploadCommit = (file: File, type: UploadType, role?: string, geo?: string) =>
   uploadForm('/api/uploads', file, type, role, geo).then((r) => { invalidateCache(); return r; });
 
-// ---- source groups -------------------------------------------------------
-export interface SourceGroupConfig {
-  groups: Record<string, string[]>;
-}
-export const fetchSourceGroups = () => req<SourceGroupConfig>('/api/data/source-groups');
-export const saveSourceGroups = (cfg: SourceGroupConfig) =>
-  jsonReq<{ ok: boolean } & SourceGroupConfig>('/api/data/source-groups', 'PUT', cfg);

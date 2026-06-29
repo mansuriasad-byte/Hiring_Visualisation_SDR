@@ -24,7 +24,6 @@ export default function App() {
           <NavLink to="/candidates">Candidates</NavLink>
           {isAdmin && <NavLink to="/sync">Sync</NavLink>}
           {isAdmin && <NavLink to="/upload">Upload</NavLink>}
-          {isAdmin && <NavLink to="/settings">Settings</NavLink>}
         </nav>
         <div className="topbar-right">
           <span className={`status status-${health}`}>{health || '…'}</span>
