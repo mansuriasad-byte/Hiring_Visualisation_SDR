@@ -95,7 +95,7 @@ function Th({ col, sort, onSort, className, children }: {
 /* ------------------------------------------------------------------ */
 /* Source conversion funnel                                            */
 /* ------------------------------------------------------------------ */
-type FunnelCol = 'source' | 'applications' | 'r1' | 'appToR1' | 'r2' | 'r1ToR2' | 'offers' | 'r2ToOffer' | 'accepted' | 'offerToAccept' | 'overall';
+type FunnelCol = 'source' | 'applications' | 'r1' | 'appToR1' | 'r2' | 'r1ToR2' | 'r3' | 'r2ToR3' | 'offers' | 'r3ToOffer' | 'accepted' | 'offerToAccept' | 'overall';
 
 function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
   const [sort, setSort] = useState<SortState<FunnelCol>>(null);
@@ -113,9 +113,9 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
   }, [rows, sort]);
 
   const csvExport = () => {
-    const hdr = 'Source,Applications,R1,App→R1%,R2,R1→R2%,Offer,R2→Offer%,Accepted,Offer→Accept%,App→Accept%';
+    const hdr = 'Source,Applications,R1,App→R1%,R2,R1→R2%,R3,R2→R3%,Offer,R3→Offer%,Accepted,Offer→Accept%,App→Accept%';
     const lines = [hdr, ...rows.map((r) =>
-      [r.source, r.applications, r.r1, r.appToR1 + '%', r.r2, r.r1ToR2 + '%', r.offers, r.r2ToOffer + '%', r.accepted, r.offerToAccept + '%', r.overall + '%'].join(',')
+      [r.source, r.applications, r.r1, r.appToR1 + '%', r.r2, r.r1ToR2 + '%', r.r3, r.r2ToR3 + '%', r.offers, r.r3ToOffer + '%', r.accepted, r.offerToAccept + '%', r.overall + '%'].join(',')
     )];
     dl('source-funnel.csv', lines.join('\n'));
   };
@@ -137,8 +137,10 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
             <Th col="appToR1" sort={sort} onSort={onSort} className="r pct">App→R1</Th>
             <Th col="r2" sort={sort} onSort={onSort} className="r">R2</Th>
             <Th col="r1ToR2" sort={sort} onSort={onSort} className="r pct">R1→R2</Th>
+            <Th col="r3" sort={sort} onSort={onSort} className="r">R3</Th>
+            <Th col="r2ToR3" sort={sort} onSort={onSort} className="r pct">R2→R3</Th>
             <Th col="offers" sort={sort} onSort={onSort} className="r">Offer</Th>
-            <Th col="r2ToOffer" sort={sort} onSort={onSort} className="r pct">R2→Offer</Th>
+            <Th col="r3ToOffer" sort={sort} onSort={onSort} className="r pct">R3→Offer</Th>
             <Th col="accepted" sort={sort} onSort={onSort} className="r">Accepted</Th>
             <Th col="offerToAccept" sort={sort} onSort={onSort} className="r pct">Offer→Accept</Th>
             <Th col="overall" sort={sort} onSort={onSort} className="r pct">Overall</Th>
@@ -154,7 +156,8 @@ function FunnelTable({ rows }: { rows: SourceFunnelRow[] }) {
                 <td className="r" style={s}>{r.applications}</td>
                 <td className="r" style={s}>{r.r1}</td><td className="r pct" style={s}>{r.appToR1}%</td>
                 <td className="r" style={s}>{r.r2}</td><td className="r pct" style={s}>{r.r1ToR2}%</td>
-                <td className="r" style={s}>{r.offers}</td><td className="r pct" style={s}>{r.r2ToOffer}%</td>
+                <td className="r" style={s}>{r.r3}</td><td className="r pct" style={s}>{r.r2ToR3}%</td>
+                <td className="r" style={s}>{r.offers}</td><td className="r pct" style={s}>{r.r3ToOffer}%</td>
                 <td className="r" style={s}>{r.accepted}</td><td className="r pct" style={s}>{r.offerToAccept}%</td>
                 <td className="r pct" style={s}>{r.overall}%</td>
               </tr>
@@ -284,7 +287,7 @@ function InterviewerLoad({ data }: { data: InterviewerLoadData }) {
   return (
     <div className="panel" style={{ padding: 0, marginBottom: 18, overflowX: 'auto' }}>
       <h3 style={{ padding: '14px 16px 0', margin: 0 }}>Interviewer load <span className="hint">— interviews per week</span></h3>
-      <table className="pivot">
+      <table className="pivot" style={{ minWidth: Math.max(600, 160 + data.weeks.length * 80) }}>
         <thead>
           <tr>
             <Th col="interviewer" sort={sort} onSort={onSort}>Interviewer</Th>

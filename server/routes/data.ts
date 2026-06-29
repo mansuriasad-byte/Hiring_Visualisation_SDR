@@ -220,30 +220,38 @@ router.get('/pivot', requireAuth, async (req, res) => {
     const applied: { date: string; source: string }[] = [];
     const r1: { date: string; source: string }[] = [];
     const r2: { date: string; source: string }[] = [];
+    const r3: { date: string; source: string }[] = [];
     const offers: { date: string; source: string }[] = [];
     const joined: { date: string; source: string }[] = [];
+
+    const srcOf = (rec: AirtableRecord | undefined): string => {
+      if (!rec) return 'Unknown';
+      const v = rec.fields[F.source];
+      return (v && String(v).trim()) || 'Unknown';
+    };
 
     // Applied: from ATS (date applied)
     for (const c of cand) {
       const da = c.fields[F.dateApplied];
-      if (da) applied.push({ date: String(da), source: String(c.fields[F.source] ?? 'Unknown') });
+      if (da) applied.push({ date: String(da), source: srcOf(c) });
     }
 
-    // R1 / R2: from Interviews (calendar). Join to candidate for source.
+    // R1 / R2 / R3: from Interviews (calendar). Join to candidate for source.
     for (const i of iv) {
       const round = String(i.fields['Round'] ?? '');
       const idate = String(i.fields['Interview Date'] ?? '');
       if (!idate) continue;
       const candEmail = String(i.fields['Candidate Email'] ?? '').toLowerCase();
       const candRec = candByEmail.get(candEmail);
-      const source = candRec ? String(candRec.fields[F.source] ?? 'Unknown') : '(unmatched)';
+      const source = srcOf(candRec);
       if (round === 'Round 1') r1.push({ date: idate, source });
       else if (round === 'Round 2') r2.push({ date: idate, source });
+      else if (round === 'Round 3') r3.push({ date: idate, source });
     }
 
     // Offers + Joined: from candidate records (offer/join dates)
     for (const c of cand) {
-      const src = String(c.fields[F.source] ?? 'Unknown');
+      const src = srcOf(c);
       if (c.fields[F.offerDate]) offers.push({ date: String(c.fields[F.offerDate]), source: src });
       if (c.fields[F.joinDate]) joined.push({ date: String(c.fields[F.joinDate]), source: src });
     }
@@ -251,7 +259,7 @@ router.get('/pivot', requireAuth, async (req, res) => {
     // --- determine all weeks (union across all stages) and sort ---
     const allWeekKeys = new Set<string>();
     const weekLabels = new Map<string, string>();
-    for (const list of [applied, r1, r2, offers, joined]) {
+    for (const list of [applied, r1, r2, r3, offers, joined]) {
       for (const { date } of list) {
         const k = weekKey(date);
         allWeekKeys.add(k);
@@ -265,6 +273,7 @@ router.get('/pivot', requireAuth, async (req, res) => {
       { id: 'applied', title: 'Applied / Sourced', data: applied },
       { id: 'r1', title: 'Round 1', data: r1 },
       { id: 'r2', title: 'Round 2', data: r2 },
+      { id: 'r3', title: 'Round 3', data: r3 },
       { id: 'offers', title: 'Offers', data: offers },
       { id: 'joined', title: 'Joined / Accepted', data: joined },
     ];
@@ -275,35 +284,38 @@ router.get('/pivot', requireAuth, async (req, res) => {
 
     // --- source conversion funnel ---
     const allSources = new Set<string>();
-    for (const list of [applied, r1, r2, offers, joined]) for (const e of list) allSources.add(e.source);
-    const srcFunnel = [...allSources].filter((s) => s !== '(unmatched)').sort().map((src) => {
+    for (const list of [applied, r1, r2, r3, offers, joined]) for (const e of list) allSources.add(e.source);
+    const pct = (num: number, den: number) => den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
+    const srcFunnel = [...allSources].sort().map((src) => {
       const apps = applied.filter((e) => e.source === src).length;
       const r1c = r1.filter((e) => e.source === src).length;
       const r2c = r2.filter((e) => e.source === src).length;
+      const r3c = r3.filter((e) => e.source === src).length;
       const off = offers.filter((e) => e.source === src).length;
       const acc = joined.filter((e) => e.source === src).length;
-      const pct = (num: number, den: number) => den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
       return {
-        source: src, applications: apps, r1: r1c, r2: r2c, offers: off, accepted: acc,
-        appToR1: pct(r1c, apps), r1ToR2: pct(r2c, r1c), r2ToOffer: pct(off, r2c),
-        offerToAccept: pct(acc, off), overall: pct(acc, apps),
+        source: src, applications: apps, r1: r1c, r2: r2c, r3: r3c, offers: off, accepted: acc,
+        appToR1: pct(r1c, apps), r1ToR2: pct(r2c, r1c), r2ToR3: pct(r3c, r2c),
+        r3ToOffer: pct(off, r3c), offerToAccept: pct(acc, off), overall: pct(acc, apps),
       };
     });
     // Grand total row
     const totals = {
       source: 'Grand Total',
-      applications: applied.length, r1: r1.length, r2: r2.length, offers: offers.length, accepted: joined.length,
-      appToR1: applied.length ? Math.round((r1.length / applied.length) * 1000) / 10 : 0,
-      r1ToR2: r1.length ? Math.round((r2.length / r1.length) * 1000) / 10 : 0,
-      r2ToOffer: r2.length ? Math.round((offers.length / r2.length) * 1000) / 10 : 0,
-      offerToAccept: offers.length ? Math.round((joined.length / offers.length) * 1000) / 10 : 0,
-      overall: applied.length ? Math.round((joined.length / applied.length) * 1000) / 10 : 0,
+      applications: applied.length, r1: r1.length, r2: r2.length, r3: r3.length, offers: offers.length, accepted: joined.length,
+      appToR1: pct(r1.length, applied.length),
+      r1ToR2: pct(r2.length, r1.length),
+      r2ToR3: pct(r3.length, r2.length),
+      r3ToOffer: pct(offers.length, r3.length),
+      offerToAccept: pct(joined.length, offers.length),
+      overall: pct(joined.length, applied.length),
     };
 
     // --- average days between stages ---
     // For each candidate who reached R1+, compute days between stages.
     const candR1: Map<string, string> = new Map(); // email -> earliest R1 date
     const candR2: Map<string, string> = new Map();
+    const candR3: Map<string, string> = new Map();
     for (const i of iv) {
       const email = String(i.fields['Candidate Email'] ?? '').toLowerCase();
       const d = String(i.fields['Interview Date'] ?? '');
@@ -315,12 +327,16 @@ router.get('/pivot', requireAuth, async (req, res) => {
       } else if (round === 'Round 2') {
         const prev = candR2.get(email);
         if (!prev || d < prev) candR2.set(email, d);
+      } else if (round === 'Round 3') {
+        const prev = candR3.get(email);
+        if (!prev || d < prev) candR3.set(email, d);
       }
     }
 
     const daysAppToR1: number[] = [];
     const daysR1ToR2: number[] = [];
-    const daysR2ToOffer: number[] = [];
+    const daysR2ToR3: number[] = [];
+    const daysR3ToOffer: number[] = [];
     const daysOfferToJoin: number[] = [];
 
     for (const c of cand) {
@@ -328,12 +344,14 @@ router.get('/pivot', requireAuth, async (req, res) => {
       const da = c.fields[F.dateApplied] ? String(c.fields[F.dateApplied]) : null;
       const r1d = candR1.get(email);
       const r2d = candR2.get(email);
+      const r3d = candR3.get(email);
       const od = c.fields[F.offerDate] ? String(c.fields[F.offerDate]) : null;
       const jd = c.fields[F.joinDate] ? String(c.fields[F.joinDate]) : null;
 
       if (da && r1d) { const d = daysBetween(da, r1d); if (d !== null && d >= 0) daysAppToR1.push(d); }
       if (r1d && r2d) { const d = daysBetween(r1d, r2d); if (d !== null && d >= 0) daysR1ToR2.push(d); }
-      if (r2d && od) { const d = daysBetween(r2d, od); if (d !== null && d >= 0) daysR2ToOffer.push(d); }
+      if (r2d && r3d) { const d = daysBetween(r2d, r3d); if (d !== null && d >= 0) daysR2ToR3.push(d); }
+      if ((r3d ?? r2d) && od) { const last = r3d ?? r2d!; const d = daysBetween(last, od); if (d !== null && d >= 0) daysR3ToOffer.push(d); }
       if (od && jd) { const d = daysBetween(od, jd); if (d !== null && d >= 0) daysOfferToJoin.push(d); }
     }
 
@@ -348,7 +366,8 @@ router.get('/pivot', requireAuth, async (req, res) => {
     const velocity = [
       { transition: 'Applied → R1', avg: avg(daysAppToR1), median: median(daysAppToR1), count: daysAppToR1.length },
       { transition: 'R1 → R2', avg: avg(daysR1ToR2), median: median(daysR1ToR2), count: daysR1ToR2.length },
-      { transition: 'R2 → Offer', avg: avg(daysR2ToOffer), median: median(daysR2ToOffer), count: daysR2ToOffer.length },
+      { transition: 'R2 → R3', avg: avg(daysR2ToR3), median: median(daysR2ToR3), count: daysR2ToR3.length },
+      { transition: 'Last Round → Offer', avg: avg(daysR3ToOffer), median: median(daysR3ToOffer), count: daysR3ToOffer.length },
       { transition: 'Offer → Join', avg: avg(daysOfferToJoin), median: median(daysOfferToJoin), count: daysOfferToJoin.length },
     ];
 

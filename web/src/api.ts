@@ -77,8 +77,8 @@ export interface WeekSourceTable {
 }
 
 export interface SourceFunnelRow {
-  source: string; applications: number; r1: number; r2: number; offers: number; accepted: number;
-  appToR1: number; r1ToR2: number; r2ToOffer: number; offerToAccept: number; overall: number;
+  source: string; applications: number; r1: number; r2: number; r3: number; offers: number; accepted: number;
+  appToR1: number; r1ToR2: number; r2ToR3: number; r3ToOffer: number; offerToAccept: number; overall: number;
 }
 
 export interface VelocityRow {
