@@ -10,6 +10,7 @@ data/*.json
 data/*.db
 data/*.db-shm
 data/*.db-wal
+server/data/
 
 # TLS cert for corporate proxy (machine-specific)
 certs/

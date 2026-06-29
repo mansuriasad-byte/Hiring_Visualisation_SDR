@@ -129,3 +129,16 @@ table.pivot .pct { color: var(--muted); font-size: 12px; }
 .type-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
 .type-opt.sel { border-color: var(--accent); background: var(--panel-2); }
 .type-opt input { margin-top: 3px; }
+
+/* source group settings */
+.source-group-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.source-group-header { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.source-group-name { flex: 1; font-weight: 600; font-size: 14px; background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); }
+.source-group-name:focus { border-color: var(--accent); outline: none; }
+.source-group-remove { font-size: 18px; padding: 2px 8px; line-height: 1; }
+.source-group-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 28px; }
+.source-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 12px; color: var(--text); }
+.source-tag-x { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; }
+.source-tag-x:hover { color: var(--danger); }
+.source-group-add { display: flex; gap: 6px; }
+.source-group-add input { flex: 1; font-size: 12px; padding: 4px 8px; }

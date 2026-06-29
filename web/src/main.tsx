@@ -7,6 +7,7 @@ import Candidates from './pages/Candidates.tsx';
 import Pivot from './pages/Pivot.tsx';
 import Sync from './pages/Sync.tsx';
 import Upload from './pages/Upload.tsx';
+import Settings from './pages/Settings.tsx';
 import { AuthProvider, LoginScreen, useAuth } from './auth.tsx';
 import './styles.css';
 
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'pivot', element: <Pivot /> },
       { path: 'sync', element: <RequireAdmin><Sync /></RequireAdmin> },
       { path: 'upload', element: <RequireAdmin><Upload /></RequireAdmin> },
+      { path: 'settings', element: <RequireAdmin><Settings /></RequireAdmin> },
     ],
   },
 ]);
