@@ -164,30 +164,64 @@ export default function Upload() {
         <div className="panel">
           <h3>Upload complete</h3>
           {result.dryRun && <div style={{ color: 'var(--warn)', marginBottom: 8 }}>Dry run — Airtable not configured, nothing was written.</div>}
-          <Stats stats={result.stats} />
-          {result.write && (
-            <div className="cards" style={{ marginTop: 12 }}>
-              {Object.entries(result.write).map(([k, v]) => (
-                <div className="card" key={k}><div className="label">{k}</div><div className="value">{String(v)}</div></div>
-              ))}
-            </div>
-          )}
+          <Stats stats={result.stats} write={result.write} />
         </div>
       )}
     </div>
   );
 }
 
-function Stats({ stats }: { stats: any }) {
+const WRITE_LABELS: Record<string, string> = {
+  created: 'Created', updated: 'Updated', skippedFlagged: 'Skipped (flagged)', unmatched: 'Unmatched',
+};
+
+function Stats({ stats, write }: { stats: any; write?: any }) {
   if (!stats) return null;
+  const flagged: Record<string, number> = stats.flagged ?? {};
+  const totalFlagged = Object.values(flagged).reduce((a: number, b: unknown) => a + (b as number), 0);
+  const byRoleGeo: Record<string, number> = stats.byRoleGeo ?? {};
+
   return (
-    <div className="cards">
-      {Object.entries(stats).map(([k, v]) => (
-        <div className="card" key={k}>
-          <div className="label">{k}</div>
-          <div className="value">{typeof v === 'object' ? Object.keys(v as any).length : String(v)}</div>
+    <>
+      <div className="cards">
+        <div className="card"><div className="label">Total rows</div><div className="value">{stats.totalRows}</div></div>
+        <div className="card"><div className="label">Parsed</div><div className="value">{stats.parsed}</div></div>
+        <div className="card"><div className="label">In scope</div><div className="value">{stats.inScope}</div></div>
+        <div className="card"><div className="label">Flagged</div><div className="value">{totalFlagged}</div></div>
+      </div>
+
+      {write && (
+        <div className="cards" style={{ marginTop: 12 }}>
+          {Object.entries(write).map(([k, v]) => (
+            <div className="card" key={k}>
+              <div className="label">{WRITE_LABELS[k] ?? k}</div>
+              <div className="value">{String(v)}</div>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+
+      {totalFlagged > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Flagged breakdown</div>
+          <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+            {flagged.test > 0 && <span className="muted">Test/junk names: <strong style={{ color: 'var(--text)' }}>{flagged.test}</strong></span>}
+            {flagged.no_email > 0 && <span className="muted">Missing email: <strong style={{ color: 'var(--text)' }}>{flagged.no_email}</strong></span>}
+            {flagged.bad_email > 0 && <span className="muted">Invalid email: <strong style={{ color: 'var(--text)' }}>{flagged.bad_email}</strong></span>}
+          </div>
+        </div>
+      )}
+
+      {Object.keys(byRoleGeo).length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>By role / geo</div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
+            {Object.entries(byRoleGeo).map(([k, v]) => (
+              <span key={k} className="muted">{k}: <strong style={{ color: 'var(--text)' }}>{v}</strong></span>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
