@@ -25,10 +25,13 @@ const tally = (recs: AirtableRecord[], field: string) => {
 
 function filterCandidates(recs: AirtableRecord[], q: Record<string, unknown>): AirtableRecord[] {
   let out = recs;
-  if (q.scope !== 'all') out = out.filter((r) => r.fields[F.inScope] === true);
+  if (q.scope !== 'all') {
+    out = out.filter((r) => r.fields[F.inScope] === true);
+    if (!q.role) out = out.filter((r) => r.fields[F.role] === 'SDR');
+  }
   if (q.role) out = out.filter((r) => r.fields[F.role] === q.role);
   if (q.geo) out = out.filter((r) => r.fields[F.geo] === q.geo);
-  if (q.source) out = out.filter((r) => r.fields[F.source] === q.source);
+  if (q.source) out = out.filter((r) => groupSource(String(r.fields[F.source] ?? '')) === q.source);
   if (q.status) out = out.filter((r) => r.fields[F.status] === q.status);
   if (q.dateFrom) out = out.filter((r) => String(r.fields[F.dateApplied] ?? '') >= String(q.dateFrom));
   if (q.dateTo) out = out.filter((r) => String(r.fields[F.dateApplied] ?? '9999') <= String(q.dateTo));

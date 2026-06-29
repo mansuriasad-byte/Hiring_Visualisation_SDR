@@ -5,8 +5,9 @@ import { parseOfferStatus } from './parsers/offer.ts';
 import { toAirtableFields } from '../airtable/schema.ts';
 import {
   airtableConfigured, upsertCandidates, findCandidateIdsByEmail,
-  updateCandidatesById, createUploadBatch,
+  updateCandidatesById, createUploadBatch, listRecords,
 } from '../airtable/client.ts';
+import { F } from '../airtable/schema.ts';
 
 export interface IngestOptions {
   type: UploadType;
@@ -85,6 +86,24 @@ export async function ingest(content: string, opts: IngestOptions): Promise<Inge
     write.unmatched = usable.length - updates.length;
   } else {
     const fields = usable.map((r) => toAirtableFields(r, uploadedAt));
+
+    // Protect referral source: if a candidate already exists with Source=Referral,
+    // don't let an ATS upload overwrite it with a different source.
+    if (opts.type === 'ats') {
+      const existingRecs = await listRecords('Candidates', { fields: [F.email, F.source] });
+      const referralEmails = new Set<string>();
+      for (const r of existingRecs) {
+        if (r.fields[F.source] === 'Referral') {
+          const email = String(r.fields[F.email] ?? '').toLowerCase();
+          if (email) referralEmails.add(email);
+        }
+      }
+      for (const f of fields) {
+        const email = String(f[F.email] ?? '').toLowerCase();
+        if (email && referralEmails.has(email)) delete f[F.source];
+      }
+    }
+
     const res = await upsertCandidates(fields, ['Email']);
     write.created = res.created;
     write.updated = res.updated;

@@ -105,6 +105,18 @@ export interface CalendarStatus {
   sources: { id: string; fields: Record<string, any> }[];
 }
 
+// ---- cache (avoids re-fetch on tab switch) --------------------------------
+const cache = new Map<string, { data: unknown; ts: number }>();
+const CACHE_TTL = 60_000; // 1 minute
+
+function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return Promise.resolve(hit.data as T);
+  return fn().then((data) => { cache.set(key, { data, ts: Date.now() }); return data; });
+}
+
+export function invalidateCache() { cache.clear(); }
+
 // ---- query string --------------------------------------------------------
 const qs = (params: Record<string, string | undefined>) => {
   const p = new URLSearchParams();
@@ -120,18 +132,25 @@ export const login = (password: string) =>
   jsonReq<{ token: string; role: string; authRequired: boolean }>('/api/auth/login', 'POST', { password });
 
 // ---- data ----------------------------------------------------------------
-export const fetchMetrics = (f: Filters) => req<Metrics>(`/api/data/metrics${qs(f)}`);
-export const fetchCandidates = (f: Filters) =>
-  req<{ count: number; candidates: Candidate[] }>(`/api/data/candidates${qs(f)}`);
-export const fetchPivot = (params?: { geo?: string; dateFrom?: string; dateTo?: string }) =>
-  req<PivotResponse>(`/api/data/pivot${qs(params ?? {})}`);
+export const fetchMetrics = (f: Filters) => {
+  const url = `/api/data/metrics${qs(f)}`;
+  return cached(url, () => req<Metrics>(url));
+};
+export const fetchCandidates = (f: Filters) => {
+  const url = `/api/data/candidates${qs(f)}`;
+  return cached(url, () => req<{ count: number; candidates: Candidate[] }>(url));
+};
+export const fetchPivot = (params?: { geo?: string; dateFrom?: string; dateTo?: string }) => {
+  const url = `/api/data/pivot${qs(params ?? {})}`;
+  return cached(url, () => req<PivotResponse>(url));
+};
 export const updateCandidate = (id: string, fields: Record<string, unknown>) =>
   jsonReq<{ ok: boolean; id: string; fields: Record<string, any> }>(`/api/data/candidates/${id}`, 'PATCH', fields);
 
 // ---- calendar ------------------------------------------------------------
 export const fetchCalendarStatus = () => req<CalendarStatus>('/api/calendar/status');
 export const runCalendarSync = (body: Record<string, unknown> = {}) =>
-  jsonReq<any>('/api/calendar/sync', 'POST', body);
+  jsonReq<any>('/api/calendar/sync', 'POST', body).then((r) => { invalidateCache(); return r; });
 
 // ---- uploads -------------------------------------------------------------
 export type UploadType = 'ats' | 'referral' | 'offer';
@@ -146,7 +165,7 @@ function uploadForm(path: string, file: File, type: UploadType, role?: string, g
 export const uploadPreview = (file: File, type: UploadType, role?: string, geo?: string) =>
   uploadForm('/api/uploads/preview', file, type, role, geo);
 export const uploadCommit = (file: File, type: UploadType, role?: string, geo?: string) =>
-  uploadForm('/api/uploads', file, type, role, geo);
+  uploadForm('/api/uploads', file, type, role, geo).then((r) => { invalidateCache(); return r; });
 
 // ---- source groups -------------------------------------------------------
 export interface SourceGroupConfig {
