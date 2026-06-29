@@ -9,6 +9,7 @@ import {
   listRecords, type CalendarSourceRow, type AirtableRecord,
 } from '../airtable/client.ts';
 import { F } from '../airtable/schema.ts';
+import { fuzzyNameMatch } from '../services/fuzzyMatch.ts';
 
 export interface SyncOptions {
   since?: string; // ISO date; full pull from this date (ignores incremental cursor)
@@ -258,12 +259,16 @@ export async function reconcileUnmatchedInterviews(): Promise<ReconcileResult> {
 
   const candByEmail = new Set<string>();
   const referralsByName = new Map<string, AirtableRecord>();
+  const referralNames: string[] = [];
   for (const c of candRecs) {
     const email = String(c.fields[F.email] ?? '').toLowerCase();
     if (email) candByEmail.add(email);
     if (c.fields[F.source] === 'Referral') {
       const name = String(c.fields[F.name] ?? '').trim().toLowerCase();
-      if (name) referralsByName.set(name, c);
+      if (name) {
+        referralsByName.set(name, c);
+        referralNames.push(name);
+      }
     }
   }
 
@@ -299,7 +304,12 @@ export async function reconcileUnmatchedInterviews(): Promise<ReconcileResult> {
 
   for (const [, info] of unmatched) {
     const nameKey = info.name.trim().toLowerCase();
-    const refMatch = referralsByName.get(nameKey);
+    // Try exact match first, then fuzzy
+    let refMatch = referralsByName.get(nameKey);
+    if (!refMatch) {
+      const fuzzy = fuzzyNameMatch(nameKey, referralNames, 0.7);
+      if (fuzzy) refMatch = referralsByName.get(fuzzy.name);
+    }
 
     if (refMatch) {
       fromReferral++;

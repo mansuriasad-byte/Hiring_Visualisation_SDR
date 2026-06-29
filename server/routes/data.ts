@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { listRecords, updateRecord, airtableConfigured, type AirtableRecord } from '../airtable/client.ts';
 import { F } from '../airtable/schema.ts';
 import { STAGE_ORDER } from '../services/normalize.ts';
+import { groupSource, getSourceGroupConfig, setSourceGroupConfig, type SourceGroupConfig } from '../services/sourceGroups.ts';
 import { requireAuth, requireAdmin } from '../auth/session.ts';
 
 const router = Router();
@@ -15,7 +16,8 @@ const tally = (recs: AirtableRecord[], field: string) => {
   const m: Record<string, number> = {};
   for (const r of recs) {
     const v = r.fields[field];
-    const key = v === undefined || v === '' ? 'Unknown' : String(v);
+    let key = v === undefined || v === '' ? 'Unknown' : String(v);
+    if (field === F.source) key = groupSource(key);
     m[key] = (m[key] ?? 0) + 1;
   }
   return m;
@@ -227,7 +229,8 @@ router.get('/pivot', requireAuth, async (req, res) => {
     const srcOf = (rec: AirtableRecord | undefined): string => {
       if (!rec) return 'Unknown';
       const v = rec.fields[F.source];
-      return (v && String(v).trim()) || 'Unknown';
+      const raw = (v && String(v).trim()) || 'Unknown';
+      return groupSource(raw);
     };
 
     // Applied: from ATS (date applied)
@@ -402,6 +405,23 @@ router.get('/pivot', requireAuth, async (req, res) => {
       interviewerLoad: { weeks: iwWeeks, rows: interviewerLoad },
     });
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ---------------------------------------------------------------------------
+// Source group config (admin)
+// ---------------------------------------------------------------------------
+
+router.get('/source-groups', requireAuth, (_req, res) => {
+  res.json(getSourceGroupConfig());
+});
+
+router.put('/source-groups', requireAdmin, (req, res) => {
+  const body = req.body as SourceGroupConfig;
+  if (!body?.groups || typeof body.groups !== 'object') {
+    return res.status(400).json({ error: 'Body must have { groups: { displayName: [rawValues] } }' });
+  }
+  setSourceGroupConfig(body);
+  res.json({ ok: true, ...getSourceGroupConfig() });
 });
 
 export default router;
