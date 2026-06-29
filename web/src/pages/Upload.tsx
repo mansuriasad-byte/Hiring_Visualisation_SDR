@@ -10,6 +10,43 @@ const TYPES: { value: UploadType; label: string; hint: string }[] = [
 const ROLES = ['SDR', 'SDR Manager', 'Other'];
 const GEOS = ['US', 'Europe', 'ROW'];
 
+const TEMPLATES: Partial<Record<UploadType, { filename: string; header: string; sample: string[] }>> = {
+  offer: {
+    filename: 'offer-template.csv',
+    header: 'Candidate Name,Email,Offer Status,Offer Date,Join Date',
+    sample: [
+      'Priya Sharma,priya.sharma@gmail.com,Offered,6/15/2026,',
+      'John Smith,john.smith@outlook.com,Joined,5/20/2026,6/25/2026',
+      'Anika Patel,anika.p@yahoo.com,Declined,6/1/2026,',
+    ],
+  },
+  ats: {
+    filename: 'ats-template.csv',
+    header: 'name,email,phone,pipeline,source,application_date,designation,company,current_ctc,expected_ctc,notice,experience,location,linkedin,skills,feedback_score',
+    sample: [
+      'Priya Sharma,priya.sharma@gmail.com,9876543210,Applied,LinkedIn,3/16/2026,SDR,Acme Corp,800000,1200000,30,2 years,Mumbai,https://linkedin.com/in/priya,Sales;CRM,4',
+    ],
+  },
+  referral: {
+    filename: 'referral-template.csv',
+    header: 'Candidate Name,Candidate Email,Job Title,Referrer,TA Response,Applied Date',
+    sample: [
+      'John Smith,john.smith@gmail.com,Sales Development Representative- US,Jane Doe,Processing,Jun 10 2026',
+    ],
+  },
+};
+
+function downloadTemplate(type: UploadType) {
+  const t = TEMPLATES[type];
+  if (!t) return;
+  const content = [t.header, ...t.sample].join('\n');
+  const blob = new Blob([content], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = t.filename;
+  a.click();
+}
+
 export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
   const [type, setType] = useState<UploadType | ''>('');
@@ -63,10 +100,16 @@ export default function Upload() {
               <label key={t.value} className={`type-opt ${type === t.value ? 'sel' : ''}`}>
                 <input type="radio" name="type" checked={type === t.value}
                   onChange={() => { setType(t.value); reset(); }} />
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600 }}>{t.label}</div>
                   <div className="muted" style={{ fontSize: 12 }}>{t.hint}</div>
                 </div>
+                {TEMPLATES[t.value] && (
+                  <button className="secondary" style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap', alignSelf: 'center' }}
+                    onClick={(e) => { e.preventDefault(); downloadTemplate(t.value); }}>
+                    Download template
+                  </button>
+                )}
               </label>
             ))}
           </div>
