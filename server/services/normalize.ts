@@ -1,6 +1,8 @@
 // Shared normalization used by all parsers. Tuned against the real PyJaama HR
 // ATS export and Employee Referral dump.
 
+import { getSourceGroupConfig } from './sourceGroups.ts';
+
 export function looksLikeEmail(s: unknown): boolean {
   return typeof s === 'string' && s.includes('@');
 }
@@ -206,14 +208,24 @@ export function mapAtsPipeline(raw: unknown): AtsPipeline | null {
 }
 
 export function normalizeSource(raw: unknown): string {
-  const v = String(raw ?? '').trim().toLowerCase();
-  if (!v || v === '-') return 'Other';
-  if (v.includes('linkedin')) return 'LinkedIn';
-  if (v.includes('referral')) return 'Referral';
-  if (v.includes('job') || v.includes('naukri') || v.includes('indeed')) return 'Job Board';
-  // Outbound recruiter sourcing — a distinct channel from inbound applies.
-  if (v.includes('sourc')) return 'Sourced';
-  if (v.includes('direct')) return 'Direct';
+  const v = String(raw ?? '').trim();
+  const vLow = v.toLowerCase();
+  if (!vLow || vLow === '-') return 'Other';
+
+  // If the raw value is explicitly listed in the source group config, preserve it
+  // as-is — groupSource() handles display grouping at query time.
+  const cfg = getSourceGroupConfig();
+  for (const rawValues of Object.values(cfg.groups)) {
+    for (const rv of rawValues) {
+      if (rv.toLowerCase() === vLow) return rv;
+    }
+  }
+
+  if (vLow.includes('linkedin')) return 'LinkedIn';
+  if (vLow.includes('referral')) return 'Referral';
+  if (vLow.includes('job') || vLow.includes('naukri') || vLow.includes('indeed')) return 'Job Board';
+  if (vLow.includes('sourc')) return 'Sourced';
+  if (vLow.includes('direct')) return 'Direct';
   return 'Other';
 }
 
