@@ -18,10 +18,9 @@ export interface SourceGroupConfig {
 const DEFAULT_CONFIG: SourceGroupConfig = {
   groups: {
     'Referral': ['Referral'],
-    'LinkedIn': ['LinkedIn'],
-    'Job Board': ['Job Board'],
+    'LinkedIn': ['LinkedIn', 'Job Board', 'Direct'],
     'Sourced': ['Sourced'],
-    'Direct': ['Direct'],
+    'School of SDR': ['SCHOOL OF SDR', 'School of SDR'],
     'Other': ['Other'],
   },
 };

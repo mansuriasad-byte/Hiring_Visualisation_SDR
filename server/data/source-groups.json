@@ -1,0 +1,22 @@
+{
+  "groups": {
+    "Referral": [
+      "Referral"
+    ],
+    "LinkedIn": [
+      "LinkedIn",
+      "Job Board",
+      "Direct"
+    ],
+    "Sourced": [
+      "Sourced"
+    ],
+    "Other": [
+      "Other"
+    ],
+    "School of SDR": [
+      "SCHOOL OF SDR",
+      "School of SDR"
+    ]
+  }
+}

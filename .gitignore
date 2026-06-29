@@ -10,7 +10,8 @@ data/*.json
 data/*.db
 data/*.db-shm
 data/*.db-wal
-server/data/
+server/data/*
+!server/data/source-groups.json
 
 # TLS cert for corporate proxy (machine-specific)
 certs/
