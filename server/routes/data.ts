@@ -152,17 +152,53 @@ router.get('/metrics', requireAuth, async (req, res) => {
   try {
     const [candRecs, ivRecs] = await Promise.all([
       listRecords('Candidates'),
-      listRecords('Interviews', { fields: ['In Scope', 'Needs Review', 'Matched Candidate', 'Round', 'Geo', 'Confidence'] }),
+      listRecords('Interviews', { fields: ['In Scope', 'Needs Review', 'Matched Candidate', 'Round', 'Geo', 'Confidence', 'Candidate Email'] }),
     ]);
     const cand = filterCandidates(candRecs, req.query);
     const { scope, role, geo } = req.query;
     const byStage = tally(cand, F.stage);
+
+    // Build funnel from actual evidence (interviews + date fields), not current stage
     const FUNNEL = STAGE_ORDER.filter((s) => s !== 'Rejected');
     const fidx = (s: string) => FUNNEL.indexOf(s as (typeof FUNNEL)[number]);
-    const funnel = FUNNEL.map((stage, floor) => ({
-      stage,
-      reached: cand.filter((r) => fidx(String(r.fields[F.stage] ?? '')) >= floor).length,
-    }));
+
+    // Collect emails that reached each interview round
+    const candEmails = new Set(cand.map((r) => String(r.fields[F.email] ?? '').toLowerCase()).filter(Boolean));
+    let scopedIv = ivRecs;
+    if (scope !== 'all') scopedIv = scopedIv.filter((r) => r.fields['In Scope'] === true);
+    if (geo) scopedIv = scopedIv.filter((r) => r.fields['Geo'] === geo);
+    const reachedRound = new Map<string, Set<string>>();
+    for (const round of ['Round 1', 'Round 2', 'Round 3', 'Cultural Round']) reachedRound.set(round, new Set());
+    for (const i of scopedIv) {
+      const email = String(i.fields['Candidate Email'] ?? '').toLowerCase();
+      if (!email || !candEmails.has(email)) continue;
+      const round = String(i.fields['Round'] ?? '');
+      reachedRound.get(round)?.add(email);
+    }
+
+    const funnel = FUNNEL.map((stage) => {
+      let reached: number;
+      if (stage === 'Round 1' || stage === 'Round 2' || stage === 'Round 3' || stage === 'Cultural Round') {
+        reached = reachedRound.get(stage)!.size;
+      } else if (stage === 'Offer') {
+        reached = cand.filter((r) => r.fields[F.offerDate]).length;
+      } else if (stage === 'Hired') {
+        reached = cand.filter((r) => r.fields[F.joinDate] || r.fields[F.stage] === 'Hired').length;
+      } else {
+        const floor = fidx(stage);
+        reached = cand.filter((r) => {
+          const si = fidx(String(r.fields[F.stage] ?? ''));
+          if (si >= floor) return true;
+          if (si === -1) {
+            const email = String(r.fields[F.email] ?? '').toLowerCase();
+            for (const [, emails] of reachedRound) { if (emails.has(email)) return true; }
+            if (r.fields[F.offerDate]) return true;
+          }
+          return false;
+        }).length;
+      }
+      return { stage, reached };
+    });
     const unplaced = cand.filter((r) => fidx(String(r.fields[F.stage] ?? '')) === -1).length;
     const activeCands = cand.filter((r) => r.fields[F.status] === 'Active');
     const activePipeline: Record<string, number> = {};
