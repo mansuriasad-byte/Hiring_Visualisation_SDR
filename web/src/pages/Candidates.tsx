@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCandidates, updateCandidate, type Candidate, type Filters } from '../api.ts';
+import { fetchCandidates, updateCandidate, type Candidate } from '../api.ts';
 import { useAuth } from '../auth.tsx';
 import FilterBar, { useFilters } from '../components/FilterBar.tsx';
 
