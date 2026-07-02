@@ -10,10 +10,11 @@ const SOURCES = ['Referral', 'LinkedIn', 'Job Board', 'Sourced', 'Direct', 'Othe
 const COLUMNS: { key: string; label: string }[] = [
   { key: 'Name', label: 'Name' },
   { key: 'Geo', label: 'Geo' },
-  { key: 'Current Stage', label: 'Stage' },
+  { key: 'Derived Stage', label: 'Stage' },
+  { key: 'Current Stage', label: 'Raw Stage' },
   { key: 'Status', label: 'Status' },
-  { key: 'Source', label: 'Source' },
-  { key: 'Pipeline (raw)', label: 'Pipeline (raw)' },
+  { key: 'Grouped Source', label: 'Source' },
+  { key: 'Source', label: 'Raw Source' },
   { key: 'Referrer', label: 'Referrer' },
   { key: 'Date Applied', label: 'Applied' },
 ];
@@ -94,10 +95,11 @@ export default function Candidates() {
                 <tr key={c.id} onClick={() => isAdmin && setSelected(c)} style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
                   <td>{c.Name}<div className="muted" style={{ fontSize: 11 }}>{c.Email}</div></td>
                   <td>{c.Geo}</td>
-                  <td>{c['Current Stage']}</td>
+                  <td>{c['Derived Stage']}</td>
+                  <td className="muted">{c['Current Stage']}</td>
                   <td>{c.Status && <span className={`badge b-${c.Status}`}>{c.Status}</span>}</td>
-                  <td>{c.Source}</td>
-                  <td className="muted">{c['Pipeline (raw)']}</td>
+                  <td>{c['Grouped Source']}</td>
+                  <td className="muted">{c.Source}</td>
                   <td className="muted">{c.Referrer}</td>
                   <td className="muted">{c['Date Applied']}</td>
                 </tr>

@@ -117,8 +117,37 @@ function weekSourceTable(
 router.get('/candidates', requireAuth, async (req, res) => {
   if (!guard(res)) return;
   try {
-    const recs = await listRecords('Candidates');
-    const rows = filterCandidates(recs, req.query).map((r) => ({ id: r.id, ...r.fields }));
+    const [candRecs, ivRecs] = await Promise.all([
+      listRecords('Candidates'),
+      listRecords('Interviews', { fields: ['In Scope', 'Candidate Email', 'Round'] }),
+    ]);
+    const cand = filterCandidates(candRecs, req.query);
+
+    const roundRank: Record<string, number> = { 'Round 1': 1, 'Round 2': 2, 'Round 3': 3, 'Cultural Round': 4 };
+    const roundToStage: Record<string, string> = { 'Round 1': 'Round 1', 'Round 2': 'Round 2', 'Round 3': 'Round 3', 'Cultural Round': 'Cultural Round' };
+    const highestRound = new Map<string, number>();
+    for (const i of ivRecs) {
+      if (i.fields['In Scope'] !== true) continue;
+      const email = String(i.fields['Candidate Email'] ?? '').toLowerCase();
+      const rank = roundRank[String(i.fields['Round'] ?? '')] ?? 0;
+      if (email && rank > (highestRound.get(email) ?? 0)) highestRound.set(email, rank);
+    }
+    const rankToStage = ['', 'Round 1', 'Round 2', 'Round 3', 'Cultural Round'];
+    const excludedStatus = new Set(['Withdrawn', 'Rejected', 'Backout']);
+
+    const stageFilter = typeof req.query.stage === 'string' ? req.query.stage : undefined;
+    let rows = cand.map((r) => {
+      const email = String(r.fields[F.email] ?? '').toLowerCase();
+      const status = String(r.fields[F.status] ?? '');
+      let derived: string;
+      if (r.fields[F.joinDate] && !excludedStatus.has(status)) derived = 'Accepted';
+      else if (r.fields[F.offerDate]) derived = 'Offer';
+      else if (highestRound.has(email)) derived = rankToStage[highestRound.get(email)!];
+      else derived = String(r.fields[F.stage] ?? '');
+      const src = String(r.fields[F.source] ?? '');
+      return { id: r.id, ...r.fields, 'Derived Stage': derived, 'Grouped Source': groupSource(src) };
+    });
+    if (stageFilter) rows = rows.filter((r) => r['Derived Stage'] === stageFilter);
     res.json({ count: rows.length, candidates: rows });
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
@@ -152,10 +181,10 @@ router.get('/metrics', requireAuth, async (req, res) => {
   try {
     const [candRecs, ivRecs] = await Promise.all([
       listRecords('Candidates'),
-      listRecords('Interviews', { fields: ['In Scope', 'Needs Review', 'Matched Candidate', 'Round', 'Geo', 'Confidence', 'Candidate Email'] }),
+      listRecords('Interviews', { fields: ['In Scope', 'Needs Review', 'Matched Candidate', 'Round', 'Geo', 'Confidence', 'Candidate Email', 'Interview Date'] }),
     ]);
     const cand = filterCandidates(candRecs, req.query);
-    const { scope, role, geo } = req.query;
+    const { scope, role, geo, dateFrom, dateTo } = req.query;
     const byStage = tally(cand, F.stage);
 
     // Build funnel from actual evidence (interviews + date fields), not current stage
@@ -167,6 +196,8 @@ router.get('/metrics', requireAuth, async (req, res) => {
     let scopedIv = ivRecs;
     if (scope !== 'all') scopedIv = scopedIv.filter((r) => r.fields['In Scope'] === true);
     if (geo) scopedIv = scopedIv.filter((r) => r.fields['Geo'] === geo);
+    if (dateFrom) scopedIv = scopedIv.filter((r) => String(r.fields['Interview Date'] ?? '') >= String(dateFrom));
+    if (dateTo) scopedIv = scopedIv.filter((r) => String(r.fields['Interview Date'] ?? '9999') <= String(dateTo));
     const reachedRound = new Map<string, Set<string>>();
     for (const round of ['Round 1', 'Round 2', 'Round 3', 'Cultural Round']) reachedRound.set(round, new Set());
     for (const i of scopedIv) {
@@ -183,7 +214,8 @@ router.get('/metrics', requireAuth, async (req, res) => {
       } else if (stage === 'Offer') {
         reached = cand.filter((r) => r.fields[F.offerDate]).length;
       } else if (stage === 'Hired') {
-        reached = cand.filter((r) => r.fields[F.joinDate] || r.fields[F.stage] === 'Hired').length;
+        const excluded = new Set(['Withdrawn', 'Rejected', 'Backout']);
+        reached = cand.filter((r) => (r.fields[F.joinDate] || r.fields[F.stage] === 'Hired') && !excluded.has(String(r.fields[F.status] ?? ''))).length;
       } else {
         const floor = fidx(stage);
         reached = cand.filter((r) => {
@@ -298,10 +330,11 @@ router.get('/pivot', requireAuth, async (req, res) => {
     }
 
     // Offers + Joined: from candidate records (offer/join dates)
+    const excludedStatus = new Set(['Withdrawn', 'Rejected', 'Backout']);
     for (const c of cand) {
       const src = srcOf(c);
       if (c.fields[F.offerDate]) offers.push({ date: String(c.fields[F.offerDate]), source: src });
-      if (c.fields[F.joinDate]) joined.push({ date: String(c.fields[F.joinDate]), source: src });
+      if (c.fields[F.joinDate] && !excludedStatus.has(String(c.fields[F.status] ?? ''))) joined.push({ date: String(c.fields[F.joinDate]), source: src });
     }
 
     // --- determine all weeks (union across all stages) and sort ---

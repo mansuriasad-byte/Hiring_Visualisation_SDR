@@ -6,7 +6,8 @@ const GEOS = ['US', 'Europe', 'ROW', 'Unknown'];
 const SOURCES = ['Referral', 'LinkedIn', 'Job Board', 'Sourced', 'Direct', 'Other'];
 const STATUSES = ['Active', 'Offered', 'Hired', 'Joined', 'Rejected', 'Withdrawn', 'Backout'];
 
-const KEYS = ['scope', 'geo', 'role', 'source', 'status', 'dateFrom', 'dateTo'] as const;
+const DERIVED_STAGES = ['Applied', 'Recruiter Screening', 'CV Review', 'Round 1', 'Round 2', 'Round 3', 'Cultural Round', 'Offer', 'Accepted', 'Rejected'];
+const KEYS = ['scope', 'geo', 'role', 'source', 'status', 'stage', 'dateFrom', 'dateTo'] as const;
 
 /** Read the shared global filters from the URL query string. */
 export function useFilters(): Filters {
@@ -58,6 +59,7 @@ export default function FilterBar({ showDates = true }: { showDates?: boolean })
       <Sel k="role" label="Role" opts={ROLES} />
       <Sel k="source" label="Source" opts={SOURCES} />
       <Sel k="status" label="Status" opts={STATUSES} />
+      <Sel k="stage" label="Stage" opts={DERIVED_STAGES} />
       {showDates && (
         <>
           <div>
