@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCandidates, updateCandidate, type Candidate } from '../api.ts';
+import { fetchCandidates, updateCandidate, type Candidate, type Filters } from '../api.ts';
 import { useAuth } from '../auth.tsx';
 import FilterBar, { useFilters } from '../components/FilterBar.tsx';
 
@@ -21,8 +21,9 @@ const COLUMNS: { key: string; label: string }[] = [
 export default function Candidates() {
   const filters = useFilters();
   const { isAdmin } = useAuth();
-  const [rows, setRows] = useState<Candidate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const peekData = fetchCandidates.peek(filters);
+  const [rows, setRows] = useState<Candidate[]>(peekData?.candidates ?? []);
+  const [loading, setLoading] = useState(!peekData);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'Date Applied', dir: -1 });
   const [selected, setSelected] = useState<Candidate | null>(null);

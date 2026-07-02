@@ -21,12 +21,13 @@ export default function Pivot() {
   const [geo, setGeo] = useState<string>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [data, setData] = useState<PivotResponse | null>(null);
+  const [data, setData] = useState<PivotResponse | null>(() =>
+    fetchPivot.peek({ geo: geo || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }) ?? null
+  );
   const [err, setErr] = useState('');
 
   useEffect(() => {
     setErr('');
-    setData(null);
     fetchPivot({
       geo: geo || undefined,
       dateFrom: dateFrom || undefined,

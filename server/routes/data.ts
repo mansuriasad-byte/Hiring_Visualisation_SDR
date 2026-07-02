@@ -164,12 +164,18 @@ router.get('/metrics', requireAuth, async (req, res) => {
       reached: cand.filter((r) => fidx(String(r.fields[F.stage] ?? '')) >= floor).length,
     }));
     const unplaced = cand.filter((r) => fidx(String(r.fields[F.stage] ?? '')) === -1).length;
+    const activeCands = cand.filter((r) => r.fields[F.status] === 'Active');
+    const activePipeline: Record<string, number> = {};
+    for (const r of activeCands) {
+      const stage = String(r.fields[F.stage] ?? 'Unknown');
+      activePipeline[stage] = (activePipeline[stage] ?? 0) + 1;
+    }
     let iv = ivRecs;
     if (scope !== 'all') iv = iv.filter((r) => r.fields['In Scope'] === true);
     if (geo) iv = iv.filter((r) => r.fields['Geo'] === geo);
     res.json({
       filters: { scope: scope ?? 'in', role: role ?? null, geo: geo ?? null },
-      candidates: { total: cand.length, byStage, byStatus: tally(cand, F.status), bySource: tally(cand, F.source), byGeo: tally(cand, F.geo), byRole: tally(cand, F.role), funnel, funnelUnplaced: unplaced },
+      candidates: { total: cand.length, byStage, byStatus: tally(cand, F.status), bySource: tally(cand, F.source), byGeo: tally(cand, F.geo), byRole: tally(cand, F.role), funnel, funnelUnplaced: unplaced, activePipeline },
       interviews: { total: iv.length, inScope: iv.filter((r) => r.fields['In Scope'] === true).length, matched: iv.filter((r) => r.fields['Matched Candidate'] === true).length, needsReview: iv.filter((r) => r.fields['Needs Review'] === true).length, byRound: tally(iv, 'Round') },
     });
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }

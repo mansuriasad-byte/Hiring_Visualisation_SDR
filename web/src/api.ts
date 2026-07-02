@@ -58,6 +58,7 @@ export interface Metrics {
     byRole: Record<string, number>;
     funnel: { stage: string; reached: number }[];
     funnelUnplaced: number;
+    activePipeline: Record<string, number>;
   };
   interviews: {
     total: number; inScope: number; matched: number; needsReview: number;
@@ -107,12 +108,17 @@ export interface CalendarStatus {
 
 // ---- cache (avoids re-fetch on tab switch) --------------------------------
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_TTL = 60_000; // 1 minute
+const CACHE_TTL = 300_000; // 5 minutes
 
 function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return Promise.resolve(hit.data as T);
   return fn().then((data) => { cache.set(key, { data, ts: Date.now() }); return data; });
+}
+
+function peek<T>(key: string): T | undefined {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.data as T;
 }
 
 export function invalidateCache() { cache.clear(); }
@@ -136,14 +142,19 @@ export const fetchMetrics = (f: Filters) => {
   const url = `/api/data/metrics${qs(f)}`;
   return cached(url, () => req<Metrics>(url));
 };
+fetchMetrics.peek = (f: Filters) => peek<Metrics>(`/api/data/metrics${qs(f)}`);
+
 export const fetchCandidates = (f: Filters) => {
   const url = `/api/data/candidates${qs(f)}`;
   return cached(url, () => req<{ count: number; candidates: Candidate[] }>(url));
 };
+fetchCandidates.peek = (f: Filters) => peek<{ count: number; candidates: Candidate[] }>(`/api/data/candidates${qs(f)}`);
+
 export const fetchPivot = (params?: { geo?: string; dateFrom?: string; dateTo?: string }) => {
   const url = `/api/data/pivot${qs(params ?? {})}`;
   return cached(url, () => req<PivotResponse>(url));
 };
+fetchPivot.peek = (params?: { geo?: string; dateFrom?: string; dateTo?: string }) => peek<PivotResponse>(`/api/data/pivot${qs(params ?? {})}`);
 export const updateCandidate = (id: string, fields: Record<string, unknown>) =>
   jsonReq<{ ok: boolean; id: string; fields: Record<string, any> }>(`/api/data/candidates/${id}`, 'PATCH', fields);
 
